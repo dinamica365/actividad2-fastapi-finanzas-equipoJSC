@@ -2,9 +2,22 @@ from __future__ import annotations
 
 import io
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import yfinance as yf
+
+
+def get_history(ticker: str, period: str = "1y") -> pd.DataFrame:
+    """Download historical OHLCV data for a market symbol."""
+    symbol = ticker.strip().upper()
+    if not symbol:
+        raise ValueError("Ticker must not be empty.")
+
+    data = yf.Ticker(symbol).history(period=period, interval="1d")
+
+    if data.empty:
+        raise ValueError(f"No historical data found for ticker '{symbol}'.")
+
+    return data
 
 
 def get_one_year_history(ticker: str) -> pd.DataFrame:
@@ -21,13 +34,7 @@ def get_one_year_history(ticker: str) -> pd.DataFrame:
     pd.DataFrame
         Historical OHLCV data.
     """
-    symbol = ticker.strip().upper()
-    data = yf.Ticker(symbol).history(period="1y")
-
-    if data.empty:
-        raise ValueError(f"No historical data found for ticker '{symbol}'.")
-
-    return data
+    return get_history(ticker, period="1y")
 
 
 def build_history_chart_png(ticker: str) -> bytes:
@@ -44,6 +51,8 @@ def build_history_chart_png(ticker: str) -> bytes:
     bytes
         PNG image bytes.
     """
+    import matplotlib.pyplot as plt
+
     df = get_one_year_history(ticker)
 
     fig, ax = plt.subplots(figsize=(10, 5))
