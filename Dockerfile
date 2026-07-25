@@ -13,4 +13,4 @@ COPY src ./src
 
 RUN poetry install --no-interaction --no-ansi
 
-CMD ["python", "-m", "financial_api.api"]
+CMD ["python", "-m", "smart_portfolio_api.main"]
