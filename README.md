@@ -292,12 +292,93 @@ poetry run python -m unittest discover -s tests -p 'test_*.py'
 
 ## Docker
 
-La imagen usa:
+Construir y ejecutar la imagen localmente:
 
-```bash
+```powershell
 docker build -t smart-portfolio-api .
-docker run -p 8000:8000 smart-portfolio-api
+docker run --rm -p 8080:8080 smart-portfolio-api
 ```
+
+Abrir `http://localhost:8080/docs` o comprobar el servicio con:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/health
+```
+
+## Despliegue en Google Cloud Run
+
+Cloud Run construye el `Dockerfile`, crea una imagen en Artifact Registry y ejecuta el contenedor como un servicio administrado. Se necesita un proyecto de Google Cloud con facturación activa, [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) y permisos para Cloud Run, Cloud Build y Artifact Registry.
+
+### 1. Configurar el proyecto
+
+Iniciar sesión, definir los valores del despliegue y habilitar las APIs necesarias:
+
+```powershell
+gcloud auth login
+
+$PROJECT_ID = "mi-proyecto-gcp"
+$REGION = "us-central1"
+$SERVICE = "smart-portfolio-api"
+
+gcloud config set project $PROJECT_ID
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+```
+
+Reemplazar `mi-proyecto-gcp` por el identificador real del proyecto, no por su nombre visible.
+
+### 2. Construir y publicar
+
+Ejecutar desde la raíz del repositorio, donde está el `Dockerfile`:
+
+```powershell
+gcloud run deploy $SERVICE `
+  --source . `
+  --region $REGION `
+  --port 8080 `
+  --memory 1Gi `
+  --allow-unauthenticated
+```
+
+`--source .` envía el código a Cloud Build. Cloud Run inyecta la variable `PORT`; el contenedor ya escucha en `0.0.0.0:${PORT}`. `--allow-unauthenticated` publica la API en Internet. Para un servicio privado, usar `--no-allow-unauthenticated` y configurar permisos IAM.
+
+### 3. Obtener la URL y probar el contenedor
+
+```powershell
+$SERVICE_URL = gcloud run services describe $SERVICE `
+  --region $REGION `
+  --format="value(status.url)"
+
+Invoke-RestMethod "$SERVICE_URL/health"
+Invoke-RestMethod "$SERVICE_URL/model/metadata"
+
+$BODY = @{
+  symbol = "BTC-USD"
+  prediction_horizon = 1
+  use_cached_data = $true
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$SERVICE_URL/predict" `
+  -ContentType "application/json" `
+  -Body $BODY
+```
+
+La documentación interactiva queda disponible en `$SERVICE_URL/docs`.
+
+### 4. Publicar actualizaciones y consultar registros
+
+Después de cambiar el código, ejecutar nuevamente el comando `gcloud run deploy`; Cloud Run creará una revisión inmutable. Para consultar los registros recientes:
+
+```powershell
+gcloud run services logs read $SERVICE --region $REGION --limit 50
+```
+
+### Datos y modelos en Cloud Run
+
+Durante la construcción, `data/` y `artifacts/` se copian dentro de la imagen. Cada revisión contiene una instantánea de los CSV y de `model.joblib`, por lo que las predicciones con `use_cached_data=true` no necesitan consultar Yahoo Finance. Para actualizar esos archivos se deben regenerar localmente, validar el modelo y desplegar una nueva revisión.
+
+Los archivos creados durante la ejecución del contenedor son temporales y pueden desaparecer cuando Cloud Run detiene la instancia. No se deben usar los endpoints HTTP como mecanismo permanente de actualización. Para automatizar el proceso, usar un Cloud Run Job programado para descargar y entrenar, guardar CSV y modelos en Cloud Storage y hacer que la API cargue artefactos versionados. Consultar el [contrato del contenedor](https://cloud.google.com/run/docs/container-contract) y la [guía oficial de despliegue](https://cloud.google.com/run/docs/deploying-source-code).
 
 ## Notas de implementación
 
