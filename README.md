@@ -10,19 +10,11 @@ actividad2-fastapi-finanzas-equipoJSC/
 │   ├── raw/
 │   └── processed/
 ├── src/
-│   └── financial_api/
-│       ├── api.py
-│       ├── schemas.py
-│       ├── data.py
-│       ├── features.py
-│       ├── train.py
-│       └── predict.py
-│   └── Smart Portfolio Core/
-│       └── src/
-│           └── smart_portfolio_api/
-│               ├── main.py
-│               ├── routers/
-│               └── services/
+│   └── smart_portfolio_api/
+│       ├── main.py
+│       ├── download_data.py
+│       ├── routers/
+│       └── services/
 ├── artifacts/
 │   ├── model.joblib
 │   └── model_metadata.json
@@ -40,12 +32,12 @@ actividad2-fastapi-finanzas-equipoJSC/
 
 ```bash
 poetry install
-poetry run python -m financial_api.api
+poetry run python -m smart_portfolio_api.main
 ```
 
-## Smart Portfolio Core
+## Smart Portfolio API
 
-La carpeta `src/Smart Portfolio Core` contiene una API adicional para consultar Yahoo Finance y generar pronósticos simples. Su entrada principal está en `src/Smart Portfolio Core/src/smart_portfolio_api/main.py`.
+La API principal vive en `src/smart_portfolio_api`. Incluye endpoints para charts, forecast y la base para los endpoints de salud, mercado, predicción y metadata del modelo.
 
 ### Descargar datos históricos en CSV
 

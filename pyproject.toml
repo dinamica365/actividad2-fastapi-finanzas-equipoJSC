@@ -5,9 +5,7 @@ description = "Base del proyecto para la actividad de FastAPI y finanzas."
 authors = ["Equipo JSC"]
 readme = "README.md"
 packages = [
-    { include = "financial_api", from = "src" },
-    { include = "smart_portfolio_api", from = "src/Smart Portfolio Core/src" },
-    { include = "smart_portfolio_core", from = "src/Smart Portfolio Core/src" },
+    { include = "smart_portfolio_api", from = "src" },
 ]
 
 [tool.poetry.dependencies]
