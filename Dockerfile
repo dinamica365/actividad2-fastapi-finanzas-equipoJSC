@@ -10,7 +10,11 @@ RUN pip install --no-cache-dir poetry
 
 COPY pyproject.toml poetry.lock README.md ./
 COPY src ./src
+COPY data ./data
+COPY artifacts ./artifacts
 
 RUN poetry install --no-interaction --no-ansi
 
-CMD ["python", "-m", "smart_portfolio_api.main"]
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn smart_portfolio_api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
