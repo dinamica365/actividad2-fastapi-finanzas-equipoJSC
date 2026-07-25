@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "actividad2-fastapi-finanzas-equipojsc"
+version = "0.1.0"
+description = "Base del proyecto para la actividad de FastAPI y finanzas."
+authors = ["Equipo JSC"]
+readme = "README.md"
+packages = [{ include = "financial_api", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+fastapi = "*"
+uvicorn = "*"
+yfinance = "*"
+matplotlib = "*"
+pandas = "*"
+requests = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
