@@ -4,7 +4,9 @@
 Integrantes
 
 CLARA JOHANA ROBAYO ORTEGA : funcionabilidades de escala de datos y modelos
+
 JAVIER PRADA VILLAMIZAR    : administracion del repositorio y acompañamiento en el desarrollo de los modelos
+
 SANTIAGO ORJUELA           : Despliegue, ajustes de servidor y publicacion endpoint y acompañamieno de los modelos
 
 -------------------------------------------------------------------------------------------------------------------------------
@@ -23,20 +25,31 @@ La aplicación está desplegada en un servidor OVH y un dominio heredado en goda
 
 Swagger UI permite explorar los endpoints, revisar sus esquemas y ejecutar solicitudes desde el navegador. El acceso HTTP se redirige automáticamente a HTTPS y el certificado TLS es administrado por el proxy inverso Caddy.
 ![imagen despliegue](image.png)
+
+![endpoints disponibles](image-1.png)
 -------------------------------------------------------------------------------------------------------------------------------
 # 1. Explicacion del flujo y de los procesos , el sistema generará un predicion up/down para el activo (oro,bitcoin,dolar) para el dia siguiente
 
 • El sistema completo funciona así:
 
   CSV local
+
     ↓
+
   features_service.py
+
     ↓
+
   modelo logistic_momentum_v1
+
     ↓
+
   POST /predict
+
     ↓
+
   {"prediction": "up" o "down"}
+
 
 
   ### 1.1. Datos de entrada
@@ -245,12 +258,19 @@ Swagger UI permite explorar los endpoints, revisar sus esquemas y ejecutar solic
   No prueban solamente funciones aisladas. Levantan temporalmente la API con Uvicorn:
 
   inicia servidor
+
     ↓
+
   envía peticiones HTTP reales
+
     ↓
+
   verifica respuestas
+
     ↓
+
   apaga servidor
+
 
   Se prueban estos endpoints:
 
@@ -307,19 +327,32 @@ Swagger UI permite explorar los endpoints, revisar sus esquemas y ejecutar solic
   En resumen, la predicción actualmente encaja así:
 
   POST /predict
+
     ↓
+
   validación Pydantic
+
     ↓
+
   carga de model.joblib
+
     ↓
+
   carga de CSV local
+
     ↓
+
   cálculo de las 7 features
+
     ↓
+
   cálculo de probability_up
+
     ↓
   umbral 0.5
+
     ↓
+
   up/down
 
 
@@ -384,36 +417,67 @@ La API:
 
 
 actividad2-fastapi-finanzas-equipoJSC/
+
 ├── artifacts/
+
 │   ├── model.joblib
+
 │   └── model_metadata.json
+
 ├── data/
+
 │   ├── raw/
+
 │   └── processed/
+
 ├── src/
+
 │   └── smart_portfolio_api/
+
 │       ├── __init__.py
+
 │       ├── download_data.py
+
 │       ├── main.py
+
 │       ├── schemas.py
+
 │       ├── routers/
+
 │       │   ├── health.py
+
 │       │   ├── market_data.py
+
 │       │   ├── model.py
+
 │       │   ├── predict.py
+
 │       │   └── charts.py
+
 │       └── services/
+
 │           ├── feature_service.py
+
 │           ├── market_data_service.py
+
 │           ├── model_service.py
+
 │           └── yahoo_services.py
+
 ├── tests/
+
 ├── Dockerfile
+
 ├── pyproject.toml
+
 ├── poetry.lock
+
 ├── README.md
+
 ├── TEAM.md
+
 └── .gitignore
+
 
 -------------------------------------------------------------------------------------------------------------------------------
 ## 4. Instalación y replicacion
@@ -665,82 +729,136 @@ Abrir `http://localhost:8080/docs` o comprobar el servicio con:
 Invoke-RestMethod http://localhost:8080/health
 
 -------------------------------------------------------------------------------------------------------------------------------
-## 5. Despliegue en Google Cloud Run
+## 5. Despliegue en servidor Linux OVH
 
-Cloud Run construye el `Dockerfile`, crea una imagen en Artifact Registry y ejecuta el contenedor como un servicio administrado. Se necesita un proyecto de Google Cloud con facturación activa, [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) y permisos para Cloud Run, Cloud Build y Artifact Registry.
-
-### 5.1. Configurar el proyecto
-
-Iniciar sesión, definir los valores del despliegue y habilitar las APIs necesarias:
+La publicación actual utiliza Ubuntu 24.04 LTS en un servidor OVH con IP pública `51.83.10.157`. Docker ejecuta la API y Caddy funciona como proxy inverso, administra el certificado TLS de Let's Encrypt y redirige HTTP a HTTPS.
 
 
-gcloud auth login
-
-$PROJECT_ID = "mi-proyecto-gcp"
-$REGION = "us-central1"
-$SERVICE = "smart-portfolio-api"
-
-gcloud config set project $PROJECT_ID
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+Internet → https://api.offerty.site:443 → Caddy → 127.0.0.1:8090 → FastAPI:8080
 
 
-Reemplazar `mi-proyecto-gcp` por el identificador real del proyecto, no por su nombre visible.
+### 5.1. Preparar el servidor
 
-### 5.2. Construir y publicar
-
-Ejecutar desde la raíz del repositorio, donde está el `Dockerfile`:
+Conectarse por SSH e instalar los paquetes necesarios:
 
 
-gcloud run deploy $SERVICE `
-  --source . `
-  --region $REGION `
-  --port 8080 `
-  --memory 1Gi `
-  --allow-unauthenticated
+ssh ubuntu@51.83.10.157
+sudo apt update
+sudo apt install -y docker.io git curl
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"
 
 
-`--source .` envía el código a Cloud Build. Cloud Run inyecta la variable `PORT`; el contenedor ya escucha en `0.0.0.0:${PORT}`. `--allow-unauthenticated` publica la API en Internet. Para un servicio privado, usar `--no-allow-unauthenticated` y configurar permisos IAM.
-
-### 5.3. Obtener la URL y probar el contenedor
+Después de agregar el usuario al grupo `docker`, cerrar la sesión SSH y volver a entrar. Comprobar el espacio antes de construir imágenes:
 
 
-$SERVICE_URL = gcloud run services describe $SERVICE `
-  --region $REGION `
-  --format="value(status.url)"
-
-Invoke-RestMethod "$SERVICE_URL/health"
-Invoke-RestMethod "$SERVICE_URL/model/metadata"
-
-$BODY = @{
-  symbol = "BTC-USD"
-  prediction_horizon = 1
-  use_cached_data = $true
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "$SERVICE_URL/predict" `
-  -ContentType "application/json" `
-  -Body $BODY
+df -h /
+docker system df
 
 
-La documentación interactiva queda disponible en `$SERVICE_URL/docs`.
+Si existen muchas imágenes antiguas sin contenedores asociados, se pueden recuperar con `docker image prune -a -f`. No usar `docker volume prune` sin verificar respaldos y contenido persistente.
 
-### 5.4. Publicar actualizaciones y consultar registros
+### 5.2. Clonar y construir la aplicación
 
-Después de cambiar el código, ejecutar nuevamente el comando `gcloud run deploy`; Cloud Run creará una revisión inmutable. Para consultar los registros recientes:
+git clone --branch main --depth 1 \
+  https://github.com/dinamica365/actividad2-fastapi-finanzas-equipoJSC.git \
+  /home/ubuntu/smart-portfolio-api
 
-```powershell
-gcloud run services logs read $SERVICE --region $REGION --limit 50
-```
+cd /home/ubuntu/smart-portfolio-api
+docker build -t smart-portfolio-api:latest .
 
-### 5.5. Datos y modelos en Cloud Run
 
-Durante la construcción, `data/` y `artifacts/` se copian dentro de la imagen. Cada revisión contiene una instantánea de los CSV y de `model.joblib`, por lo que las predicciones con `use_cached_data=true` no necesitan consultar Yahoo Finance. Para actualizar esos archivos se deben regenerar localmente, validar el modelo y desplegar una nueva revisión.
+El `Dockerfile` instala Poetry y las dependencias, y copia `src/`, `data/` y `artifacts/` dentro de la imagen.
 
-Los archivos creados durante la ejecución del contenedor son temporales y pueden desaparecer cuando Cloud Run detiene la instancia. No se deben usar los endpoints HTTP como mecanismo permanente de actualización. Para automatizar el proceso, usar un Cloud Run Job programado para descargar y entrenar, guardar CSV y modelos en Cloud Storage y hacer que la API cargue artefactos versionados. Consultar el [contrato del contenedor](https://cloud.google.com/run/docs/container-contract) y la [guía oficial de despliegue](https://cloud.google.com/run/docs/deploying-source-code).
+### 5.3. Crear el contenedor de FastAPI
 
-## 5.6. Notas de implementación
+La API se publica únicamente en la interfaz local. Así, el puerto `8090` no queda accesible directamente desde Internet:
+
+
+docker run -d \
+  --name smart-portfolio-api \
+  --restart unless-stopped \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -p 127.0.0.1:8090:8080 \
+  smart-portfolio-api:latest
+
+curl http://127.0.0.1:8090/health
+
+
+La rotación limita los registros del contenedor a tres archivos de 10 MB y ayuda a evitar que Docker llene el disco.
+
+### 5.4. Configurar el DNS en GoDaddy
+
+El dominio utilizado es `offerty.site`, con dos letras `f`. En la administración DNS de GoDaddy se creó o actualizó el siguiente registro:
+
+| Tipo | Nombre | Valor        | TTL          |
+|------|--------|-------       |-----         |
+| A    | api    | 51.83.10.157 | 600 segundos |
+
+El resultado esperado es api.offerty.site → 51.83.10.157`. La propagación puede comprobarse con:
+
+
+nslookup api.offerty.site 8.8.8.8
+nslookup api.offerty.site 1.1.1.1
+
+
+Antes de solicitar el certificado, el registro debe devolver la IP de OVH. También deben estar disponibles los puertos TCP `80` y `443` en el servidor y en cualquier firewall de red.
+
+### 5.5. Crear el proxy inverso y habilitar HTTPS
+
+Caddy se ejecuta en otro contenedor con red del host. Sus datos y certificados se conservan fuera del contenedor:
+
+mkdir -p /home/ubuntu/caddy-data /home/ubuntu/caddy-config
+
+docker run -d \
+  --name smart-portfolio-proxy \
+  --restart unless-stopped \
+  --network host \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -v /home/ubuntu/caddy-data:/data \
+  -v /home/ubuntu/caddy-config:/config \
+  caddy:2 caddy reverse-proxy \
+  --from api.offerty.site \
+  --to 127.0.0.1:8090
+
+
+Caddy solicita el certificado a Let's Encrypt, atiende HTTPS en `443`, redirige HTTP desde `80` y renueva el certificado automáticamente.
+
+### 5.6. Validar la publicación
+
+
+curl https://api.offerty.site/health
+curl https://api.offerty.site/model/metadata
+curl -I http://api.offerty.site/health
+
+
+La última solicitud debe responder con redirección `308` hacia HTTPS. La documentación interactiva está en [https://api.offerty.site/docs](https://api.offerty.site/docs).
+
+### 5.7. Actualizar una versión desplegada
+
+
+cd /home/ubuntu/smart-portfolio-api
+git pull --ff-only origin main
+docker build -t smart-portfolio-api:latest .
+docker rm -f smart-portfolio-api
+docker run -d \
+  --name smart-portfolio-api \
+  --restart unless-stopped \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -p 127.0.0.1:8090:8080 \
+  smart-portfolio-api:latest
+
+
+El proxy no necesita recrearse para actualizar la API. Para diagnóstico usar `docker logs --tail 100 smart-portfolio-api` y `docker logs --tail 100 smart-portfolio-proxy`.
+
+### 5.8. Datos y modelos
+
+Los CSV y `artifacts/model.joblib` forman parte de la imagen construida. Para publicar nuevos datos o un modelo entrenado se actualizan en el repositorio, se valida el proyecto y se reconstruye la imagen. Los cambios escritos solamente dentro del contenedor se pierden al recrearlo; si se necesita actualización dinámica, se deben montar volúmenes o utilizar almacenamiento externo.
+
+## 6. Notas de implementación
 
 - `GET /docs` está habilitado por defecto por FastAPI.
 - El modelo se regenera automáticamente desde caché local si el artefacto no existe o no se puede cargar.
